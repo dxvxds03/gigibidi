@@ -26,21 +26,29 @@ export default async function MediaPage({
 
   const src = publicMediaUrl(item.storage_path);
 
-  return (
-    <main className="wrap wrap-single">
-      <h1 className="title">{item.title}</h1>
+  const isVideo = item.kind === "video";
 
-      {item.kind === "video" ? (
-        <div className="video-frame">
-          <video src={src} controls playsInline preload="metadata" />
-        </div>
-      ) : (
-        <div className="single-audio">
-          <audio controls preload="none" src={src}>
-            Dein Browser unterstützt kein Audio.
-          </audio>
-        </div>
-      )}
-    </main>
+  return (
+    <>
+      {/* Video-Seiten: Hintergrund schwarz, Lyrics-Muster bleibt sichtbar */}
+      {isVideo ? (
+        <style>{`:root{--bg:#000}.lyrics-bg-inner{opacity:.32}`}</style>
+      ) : null}
+      <main className="wrap wrap-single">
+        <h1 className="title">{item.title}</h1>
+
+        {isVideo ? (
+          <div className="video-frame">
+            <video src={src} controls playsInline preload="metadata" />
+          </div>
+        ) : (
+          <div className="single-audio">
+            <audio controls preload="none" src={src}>
+              Dein Browser unterstützt kein Audio.
+            </audio>
+          </div>
+        )}
+      </main>
+    </>
   );
 }

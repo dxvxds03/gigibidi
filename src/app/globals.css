@@ -437,8 +437,14 @@ a.btn.small {
   .wrap {
     padding: 38px 18px 72px;
   }
+  /* Einzelseite: Inhalt vertikal in die Bildschirmmitte */
   .wrap-single {
-    padding-top: 30px;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: 28px;
+    padding-bottom: 48px;
   }
 
   h1.title {
