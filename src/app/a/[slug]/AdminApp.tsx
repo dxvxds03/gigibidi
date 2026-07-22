@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Track } from "@/lib/supabase";
 
-type Config = { heading: string; intro: string };
-
 const VIDEO_EXT = ["mp4", "mov", "webm", "m4v", "ogv", "mkv"];
 
 function detectKind(file: File): "audio" | "video" {
@@ -19,22 +17,14 @@ export default function AdminApp({
   slug,
   publicSlug,
   initialTracks,
-  initialConfig,
 }: {
   authed: boolean;
   slug: string;
   publicSlug: string;
   initialTracks: Track[];
-  initialConfig: Config;
 }) {
   if (!authed) return <Login slug={slug} />;
-  return (
-    <Dashboard
-      publicSlug={publicSlug}
-      initialTracks={initialTracks}
-      initialConfig={initialConfig}
-    />
-  );
+  return <Dashboard publicSlug={publicSlug} initialTracks={initialTracks} />;
 }
 
 function Login({ slug }: { slug: string }) {
@@ -92,15 +82,12 @@ function Login({ slug }: { slug: string }) {
 function Dashboard({
   publicSlug,
   initialTracks,
-  initialConfig,
 }: {
   publicSlug: string;
   initialTracks: Track[];
-  initialConfig: Config;
 }) {
   const router = useRouter();
   const [tracks, setTracks] = useState<Track[]>(initialTracks);
-  const [config, setConfig] = useState<Config>(initialConfig);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
     null
   );
@@ -211,17 +198,6 @@ function Dashboard({
     });
   }
 
-  async function saveConfig(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await fetch("/api/config", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(config),
-    });
-    if (res.ok) flash("ok", "Einstellungen gespeichert.");
-    else flash("err", "Speichern fehlgeschlagen.");
-  }
-
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
     router.refresh();
@@ -313,33 +289,6 @@ function Dashboard({
             />
           ))
         )}
-      </div>
-
-      {/* Einstellungen der Übersichtsseite */}
-      <div className="card">
-        <h3>Übersichtsseite</h3>
-        <form onSubmit={saveConfig}>
-          <div className="field">
-            <label htmlFor="heading">Überschrift</label>
-            <input
-              id="heading"
-              type="text"
-              value={config.heading}
-              onChange={(e) => setConfig({ ...config, heading: e.target.value })}
-              placeholder="Meine Medien"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="intro">Einleitungstext (optional)</label>
-            <textarea
-              id="intro"
-              rows={2}
-              value={config.intro}
-              onChange={(e) => setConfig({ ...config, intro: e.target.value })}
-            />
-          </div>
-          <button type="submit">Speichern</button>
-        </form>
       </div>
 
       <ChangePassword flash={flash} />

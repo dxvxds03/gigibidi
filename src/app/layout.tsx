@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Roboto_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,6 +13,12 @@ export const metadata: Metadata = {
   title: "Déjà Vu",
   description: "Private media collection",
   robots: { index: false, follow: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 const LYRICS = `Baby, seem like everywhere I go, I see you

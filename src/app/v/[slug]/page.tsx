@@ -54,8 +54,6 @@ export default async function OverviewPage({
           </Link>
         ))
       )}
-
-      <div className="footer">Privat geteilt · nur über diesen Link erreichbar</div>
     </main>
   );
 }

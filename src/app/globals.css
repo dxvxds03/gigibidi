@@ -431,3 +431,90 @@ a.btn.small {
   background: var(--ink);
   transition: width 0.2s ease;
 }
+
+/* ---------- Mobile (Hauptnutzung) ---------- */
+@media (max-width: 640px) {
+  .wrap {
+    padding: 38px 18px 72px;
+  }
+  .wrap-single {
+    padding-top: 30px;
+  }
+
+  h1.title {
+    font-size: clamp(34px, 12.5vw, 60px);
+    line-height: 0.98;
+    letter-spacing: -0.03em;
+  }
+  .brand {
+    margin-bottom: 20px;
+  }
+
+  /* Hintergrundmuster feiner auf kleinen Screens */
+  .lyrics-bg-inner {
+    column-width: 88px;
+    column-gap: 12px;
+    font-size: 8px;
+  }
+
+  /* Uebersicht: kompakte, gut tippbare Zeilen */
+  .track-link {
+    gap: 12px;
+    padding: 20px 2px;
+  }
+  .track-link .track-title {
+    font-size: clamp(19px, 6.2vw, 28px);
+  }
+  .track-link .track-go {
+    display: none;
+  }
+
+  .card {
+    padding: 20px 18px;
+  }
+  .section-label {
+    margin: 30px 0 16px;
+  }
+
+  /* iOS-Zoom beim Fokus verhindern -> min. 16px */
+  input[type="text"],
+  input[type="password"],
+  input[type="url"],
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Groessere Tap-Ziele */
+  button,
+  .btn {
+    padding: 14px 18px;
+  }
+  button.small,
+  .btn.small {
+    padding: 11px 14px;
+    font-size: 12px;
+  }
+
+  /* Admin-Zeilen sauber untereinander */
+  .admin-item-top {
+    gap: 8px;
+  }
+  .admin-item-top .grow {
+    flex-basis: 100%;
+    order: 3;
+    min-width: 0;
+  }
+  .permalink-row {
+    padding-left: 0;
+  }
+  .permalink-row input {
+    flex-basis: 100%;
+  }
+
+  .spread {
+    align-items: flex-start;
+  }
+  .video-frame video {
+    object-fit: contain;
+  }
+}

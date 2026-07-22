@@ -28,9 +28,6 @@ export default async function MediaPage({
 
   return (
     <main className="wrap wrap-single">
-      <div className="brand">
-        <span className="dot" /> {item.kind === "video" ? "Video" : "Audio"}
-      </div>
       <h1 className="title">{item.title}</h1>
 
       {item.kind === "video" ? (
@@ -44,8 +41,6 @@ export default async function MediaPage({
           </audio>
         </div>
       )}
-
-      <div className="footer">Privat geteilt · nur über diesen Link erreichbar</div>
     </main>
   );
 }

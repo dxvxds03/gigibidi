@@ -18,20 +18,14 @@ export default async function AdminPage({
   const authed = await isAuthenticated();
 
   let tracks: Track[] = [];
-  let config = { heading: "", intro: "" };
 
   if (authed) {
     const supabase = getServiceClient();
-    const [{ data: tracksData }, { data: configRows }] = await Promise.all([
-      supabase.from("tracks").select("*").order("sort_order", { ascending: true }),
-      supabase.from("app_config").select("key,value"),
-    ]);
+    const { data: tracksData } = await supabase
+      .from("tracks")
+      .select("*")
+      .order("sort_order", { ascending: true });
     tracks = (tracksData ?? []) as Track[];
-    const cfg = new Map((configRows ?? []).map((r: any) => [r.key, r.value]));
-    config = {
-      heading: cfg.get("heading") || "",
-      intro: cfg.get("intro") || "",
-    };
   }
 
   return (
@@ -40,7 +34,6 @@ export default async function AdminPage({
       slug={slug}
       publicSlug={process.env.PUBLIC_SLUG || ""}
       initialTracks={tracks}
-      initialConfig={config}
     />
   );
 }
