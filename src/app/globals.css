@@ -149,6 +149,12 @@ p.intro {
   width: 100%;
 }
 
+/* Native Media-Regler in der Akzentfarbe tinten */
+audio,
+video {
+  accent-color: var(--ink);
+}
+
 /* ---------- Uebersicht: grosse typografische Zeilen ---------- */
 .track-link {
   display: flex;
