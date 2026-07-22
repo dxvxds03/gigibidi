@@ -4,7 +4,7 @@ import { getServiceClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
-const KEYS = ["heading", "intro", "video_url"] as const;
+const KEYS = ["heading", "intro"] as const;
 
 export async function PATCH(req: Request) {
   if (!(await isAuthenticated())) {

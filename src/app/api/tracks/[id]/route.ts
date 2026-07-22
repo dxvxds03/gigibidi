@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAuthenticated } from "@/lib/auth";
-import { AUDIO_BUCKET, getServiceClient } from "@/lib/supabase";
+import { MEDIA_BUCKET, getServiceClient } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
@@ -42,7 +42,7 @@ export async function DELETE(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (row?.storage_path) {
-    await supabase.storage.from(AUDIO_BUCKET).remove([row.storage_path]);
+    await supabase.storage.from(MEDIA_BUCKET).remove([row.storage_path]);
   }
   return NextResponse.json({ ok: true });
 }

@@ -18,7 +18,7 @@ export default async function AdminPage({
   const authed = await isAuthenticated();
 
   let tracks: Track[] = [];
-  let config = { heading: "", intro: "", video_url: "" };
+  let config = { heading: "", intro: "" };
 
   if (authed) {
     const supabase = getServiceClient();
@@ -31,7 +31,6 @@ export default async function AdminPage({
     config = {
       heading: cfg.get("heading") || "",
       intro: cfg.get("intro") || "",
-      video_url: cfg.get("video_url") || "",
     };
   }
 

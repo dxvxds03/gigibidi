@@ -4,7 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Track } from "@/lib/supabase";
 
-type Config = { heading: string; intro: string; video_url: string };
+type Config = { heading: string; intro: string };
+
+const VIDEO_EXT = ["mp4", "mov", "webm", "m4v", "ogv", "mkv"];
+
+function detectKind(file: File): "audio" | "video" {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (VIDEO_EXT.includes(ext) || file.type.startsWith("video/")) return "video";
+  return "audio";
+}
 
 export default function AdminApp({
   authed,
@@ -22,7 +30,6 @@ export default function AdminApp({
   if (!authed) return <Login slug={slug} />;
   return (
     <Dashboard
-      slug={slug}
       publicSlug={publicSlug}
       initialTracks={initialTracks}
       initialConfig={initialConfig}
@@ -35,7 +42,6 @@ function Login({ slug }: { slug: string }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [hint, setHint] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,14 +54,8 @@ function Login({ slug }: { slug: string }) {
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
-    if (res.ok) {
-      if (data.bootstrapped) {
-        setHint("Passwort wurde gesetzt. Du wirst eingeloggt …");
-      }
-      router.refresh();
-    } else {
-      setErr(data.error || "Login fehlgeschlagen.");
-    }
+    if (res.ok) router.refresh();
+    else setErr(data.error || "Login fehlgeschlagen.");
   }
 
   return (
@@ -68,7 +68,6 @@ function Login({ slug }: { slug: string }) {
           Anmelden
         </h1>
         {err ? <div className="notice err">{err}</div> : null}
-        {hint ? <div className="notice ok">{hint}</div> : null}
         <form onSubmit={submit} className="card">
           <div className="field">
             <label htmlFor="pw">Passwort</label>
@@ -84,10 +83,6 @@ function Login({ slug }: { slug: string }) {
           <button type="submit" disabled={busy || !password}>
             {busy ? "Prüfe …" : "Einloggen"}
           </button>
-          <p className="muted" style={{ marginTop: 14 }}>
-            Beim allerersten Login wird das eingegebene Passwort als neues
-            Passwort gespeichert.
-          </p>
         </form>
       </div>
     </div>
@@ -95,12 +90,10 @@ function Login({ slug }: { slug: string }) {
 }
 
 function Dashboard({
-  slug,
   publicSlug,
   initialTracks,
   initialConfig,
 }: {
-  slug: string;
   publicSlug: string;
   initialTracks: Track[];
   initialConfig: Config;
@@ -112,57 +105,74 @@ function Dashboard({
     null
   );
 
-  // upload state
   const [newTitle, setNewTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
 
   function flash(kind: "ok" | "err", text: string) {
     setMsg({ kind, text });
-    setTimeout(() => setMsg(null), 4000);
+    setTimeout(() => setMsg(null), 5000);
   }
 
-  async function refreshTracks() {
-    const res = await fetch("/api/tracks");
-    if (res.ok) setTracks(await res.json());
-  }
-
-  function upload(e: React.FormEvent) {
+  // Direkter Upload zu Supabase (umgeht Vercel-Limit) + Anlegen des Eintrags.
+  async function upload(e: React.FormEvent) {
     e.preventDefault();
     if (!file || !newTitle.trim()) return;
-    const fd = new FormData();
-    fd.append("title", newTitle.trim());
-    fd.append("file", file);
+    const kind = detectKind(file);
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/tracks");
-    xhr.upload.onprogress = (ev) => {
-      if (ev.lengthComputable) {
-        setUploadPct(Math.round((ev.loaded / ev.total) * 100));
-      }
-    };
-    xhr.onload = () => {
+    try {
+      setUploadPct(0);
+
+      // 1) Signierte Upload-URL holen
+      const signRes = await fetch("/api/uploads/sign", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ filename: file.name }),
+      });
+      if (!signRes.ok) throw new Error((await signRes.json()).error || "Signieren fehlgeschlagen.");
+      const { signedUrl, path } = await signRes.json();
+
+      // 2) Datei direkt zu Supabase Storage (mit Fortschritt)
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", signedUrl);
+        xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) setUploadPct(Math.round((ev.loaded / ev.total) * 100));
+        };
+        xhr.onload = () =>
+          xhr.status >= 200 && xhr.status < 300
+            ? resolve()
+            : reject(new Error(`Upload fehlgeschlagen (HTTP ${xhr.status}).`));
+        xhr.onerror = () => reject(new Error("Netzwerkfehler beim Upload."));
+        xhr.send(file);
+      });
+
+      // 3) Eintrag anlegen (erzeugt den Permalink-Slug)
+      const commitRes = await fetch("/api/tracks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          kind,
+          storage_path: path,
+          mime: file.type || null,
+        }),
+      });
+      if (!commitRes.ok) throw new Error((await commitRes.json()).error || "Anlegen fehlgeschlagen.");
+      const created: Track = await commitRes.json();
+
+      setTracks((t) => [...t, created]);
+      setNewTitle("");
+      setFile(null);
+      const el = document.getElementById("file") as HTMLInputElement | null;
+      if (el) el.value = "";
+      flash("ok", `${kind === "video" ? "Video" : "Audio"} hochgeladen – Permalink erstellt.`);
+    } catch (err: any) {
+      flash("err", err?.message || "Upload fehlgeschlagen.");
+    } finally {
       setUploadPct(null);
-      if (xhr.status >= 200 && xhr.status < 300) {
-        setNewTitle("");
-        setFile(null);
-        (document.getElementById("file") as HTMLInputElement).value = "";
-        flash("ok", "Audio hochgeladen.");
-        refreshTracks();
-      } else {
-        let e = "Upload fehlgeschlagen.";
-        try {
-          e = JSON.parse(xhr.responseText).error || e;
-        } catch {}
-        flash("err", e);
-      }
-    };
-    xhr.onerror = () => {
-      setUploadPct(null);
-      flash("err", "Netzwerkfehler beim Upload.");
-    };
-    setUploadPct(0);
-    xhr.send(fd);
+    }
   }
 
   async function saveTitle(id: string, title: string) {
@@ -171,12 +181,14 @@ function Dashboard({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title }),
     });
-    if (res.ok) flash("ok", "Titel gespeichert.");
-    else flash("err", "Speichern fehlgeschlagen.");
+    if (res.ok) {
+      setTracks((t) => t.map((x) => (x.id === id ? { ...x, title } : x)));
+      flash("ok", "Titel gespeichert.");
+    } else flash("err", "Speichern fehlgeschlagen.");
   }
 
   async function remove(id: string) {
-    if (!confirm("Dieses Audio wirklich löschen?")) return;
+    if (!confirm("Diesen Eintrag wirklich löschen? Der Permalink wird ungültig.")) return;
     const res = await fetch(`/api/tracks/${id}`, { method: "DELETE" });
     if (res.ok) {
       setTracks((t) => t.filter((x) => x.id !== id));
@@ -223,13 +235,13 @@ function Dashboard({
             <span className="dot" /> Bearbeitung
           </div>
           <h1 className="title" style={{ fontSize: 36, margin: 0 }}>
-            Audio verwalten
+            Medien verwalten
           </h1>
         </div>
         <div className="row">
           {publicSlug ? (
             <a className="btn ghost" href={`/v/${publicSlug}`} target="_blank">
-              Öffentliche Seite ↗
+              Übersicht ↗
             </a>
           ) : null}
           <button className="ghost" onClick={logout}>
@@ -242,7 +254,7 @@ function Dashboard({
 
       {/* Upload */}
       <div className="card">
-        <h3>Neues Audio hochladen</h3>
+        <h3>Neues Audio / Video hochladen</h3>
         <form onSubmit={upload}>
           <div className="field">
             <label htmlFor="title">Überschrift</label>
@@ -251,17 +263,23 @@ function Dashboard({
               type="text"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="z.B. Kapitel 1 – Einleitung"
+              placeholder="z.B. Grußwort von Oma"
             />
           </div>
           <div className="field">
-            <label htmlFor="file">Audiodatei (mp3, m4a, wav, ogg …)</label>
+            <label htmlFor="file">Datei (.m4a, .mp3, .mp4, .mov …)</label>
             <input
               id="file"
               type="file"
-              accept="audio/*"
+              accept="audio/*,video/*,.m4a,.mp4,.mov"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
+            {file ? (
+              <p className="muted" style={{ marginTop: 8 }}>
+                Erkannt als <strong>{detectKind(file) === "video" ? "Video" : "Audio"}</strong>{" "}
+                · {(file.size / 1024 / 1024).toFixed(1)} MB
+              </p>
+            ) : null}
           </div>
           {uploadPct !== null ? (
             <div className="progress">
@@ -270,15 +288,15 @@ function Dashboard({
           ) : null}
           <div style={{ marginTop: 14 }}>
             <button type="submit" disabled={!file || !newTitle.trim() || uploadPct !== null}>
-              {uploadPct !== null ? `Lädt … ${uploadPct}%` : "Hochladen"}
+              {uploadPct !== null ? `Lädt … ${uploadPct}%` : "Hochladen & Permalink erstellen"}
             </button>
           </div>
         </form>
       </div>
 
-      {/* Track list */}
+      {/* Liste */}
       <div className="card">
-        <h3>Vorhandene Audios ({tracks.length})</h3>
+        <h3>Vorhandene Medien ({tracks.length})</h3>
         {tracks.length === 0 ? (
           <p className="muted">Noch nichts hochgeladen.</p>
         ) : (
@@ -291,27 +309,28 @@ function Dashboard({
               onSave={saveTitle}
               onDelete={remove}
               onMove={move}
+              flash={flash}
             />
           ))
         )}
       </div>
 
-      {/* Site config */}
+      {/* Einstellungen der Übersichtsseite */}
       <div className="card">
-        <h3>Seiten-Einstellungen</h3>
+        <h3>Übersichtsseite</h3>
         <form onSubmit={saveConfig}>
           <div className="field">
-            <label htmlFor="heading">Überschrift der Seite</label>
+            <label htmlFor="heading">Überschrift</label>
             <input
               id="heading"
               type="text"
               value={config.heading}
               onChange={(e) => setConfig({ ...config, heading: e.target.value })}
-              placeholder="Meine Audios"
+              placeholder="Meine Medien"
             />
           </div>
           <div className="field">
-            <label htmlFor="intro">Kurzer Einleitungstext (optional)</label>
+            <label htmlFor="intro">Einleitungstext (optional)</label>
             <textarea
               id="intro"
               rows={2}
@@ -319,21 +338,10 @@ function Dashboard({
               onChange={(e) => setConfig({ ...config, intro: e.target.value })}
             />
           </div>
-          <div className="field">
-            <label htmlFor="video">Video-Link (YouTube, Vimeo oder .mp4 – optional)</label>
-            <input
-              id="video"
-              type="url"
-              value={config.video_url}
-              onChange={(e) => setConfig({ ...config, video_url: e.target.value })}
-              placeholder="https://youtu.be/…"
-            />
-          </div>
-          <button type="submit">Einstellungen speichern</button>
+          <button type="submit">Speichern</button>
         </form>
       </div>
 
-      {/* Password */}
       <ChangePassword flash={flash} />
     </main>
   );
@@ -346,6 +354,7 @@ function TrackRow({
   onSave,
   onDelete,
   onMove,
+  flash,
 }: {
   track: Track;
   first: boolean;
@@ -353,36 +362,59 @@ function TrackRow({
   onSave: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onMove: (id: string, dir: -1 | 1) => void;
+  flash: (kind: "ok" | "err", text: string) => void;
 }) {
   const [title, setTitle] = useState(track.title);
   const dirty = title !== track.title;
+  const permalink =
+    typeof window !== "undefined" ? `${window.location.origin}/m/${track.slug}` : `/m/${track.slug}`;
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(permalink);
+      flash("ok", "Permalink kopiert.");
+    } catch {
+      flash("err", "Kopieren nicht möglich.");
+    }
+  }
+
   return (
-    <div className="admin-track">
-      <div className="order-btns">
-        <button onClick={() => onMove(track.id, -1)} disabled={first} title="Nach oben">
-          ▲
+    <div className="admin-item">
+      <div className="admin-item-top">
+        <div className="order-btns">
+          <button onClick={() => onMove(track.id, -1)} disabled={first} title="Nach oben">
+            ▲
+          </button>
+          <button onClick={() => onMove(track.id, 1)} disabled={last} title="Nach unten">
+            ▼
+          </button>
+        </div>
+        <span className={`kind kind-${track.kind}`}>
+          {track.kind === "video" ? "▶ Video" : "♪ Audio"}
+        </span>
+        <div className="grow">
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
+        </div>
+        <button
+          className="small"
+          onClick={() => onSave(track.id, title.trim())}
+          disabled={!dirty || !title.trim()}
+        >
+          Speichern
         </button>
-        <button onClick={() => onMove(track.id, 1)} disabled={last} title="Nach unten">
-          ▼
+        <button className="small danger" onClick={() => onDelete(track.id)}>
+          Löschen
         </button>
       </div>
-      <div className="grow">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
+      <div className="permalink-row">
+        <input type="text" readOnly value={permalink} onFocus={(e) => e.target.select()} />
+        <button className="small" onClick={copy}>
+          Kopieren
+        </button>
+        <a className="btn ghost small" href={`/m/${track.slug}`} target="_blank">
+          Öffnen ↗
+        </a>
       </div>
-      <button
-        className="small"
-        onClick={() => onSave(track.id, title.trim())}
-        disabled={!dirty || !title.trim()}
-      >
-        Speichern
-      </button>
-      <button className="small danger" onClick={() => onDelete(track.id)}>
-        Löschen
-      </button>
     </div>
   );
 }
@@ -417,12 +449,7 @@ function ChangePassword({
       <form onSubmit={save} className="row" style={{ alignItems: "flex-end" }}>
         <div className="grow" style={{ flex: 1 }}>
           <label htmlFor="np">Neues Passwort (min. 6 Zeichen)</label>
-          <input
-            id="np"
-            type="password"
-            value={pw}
-            onChange={(e) => setPw(e.target.value)}
-          />
+          <input id="np" type="password" value={pw} onChange={(e) => setPw(e.target.value)} />
         </div>
         <button type="submit" disabled={busy || pw.trim().length < 6}>
           Ändern

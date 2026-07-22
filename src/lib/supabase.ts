@@ -24,16 +24,21 @@ export function getServiceClient(): SupabaseClient {
   return cached;
 }
 
-export const AUDIO_BUCKET = "audio";
+// Bucket haelt Audios UND Videos (oeffentlich lesbar fuer die Permalinks).
+export const MEDIA_BUCKET = "audio";
 
-export function publicAudioUrl(storagePath: string): string {
+export function publicMediaUrl(storagePath: string): string {
   const url = process.env.SUPABASE_URL ?? "";
-  return `${url}/storage/v1/object/public/${AUDIO_BUCKET}/${storagePath}`;
+  return `${url}/storage/v1/object/public/${MEDIA_BUCKET}/${storagePath}`;
 }
+
+export type MediaKind = "audio" | "video";
 
 export type Track = {
   id: string;
   title: string;
+  slug: string;
+  kind: MediaKind;
   storage_path: string;
   mime: string | null;
   sort_order: number;
@@ -43,5 +48,4 @@ export type Track = {
 export type SiteConfig = {
   heading: string;
   intro: string | null;
-  video_url: string | null;
 };

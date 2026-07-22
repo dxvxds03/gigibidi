@@ -1,35 +1,12 @@
 import { notFound } from "next/navigation";
-import { getServiceClient, publicAudioUrl, Track, SiteConfig } from "@/lib/supabase";
+import Link from "next/link";
+import { getServiceClient, Track, SiteConfig } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function toEmbed(url: string): { kind: "iframe" | "video"; src: string } {
-  try {
-    const u = new URL(url);
-    const host = u.hostname.replace(/^www\./, "");
-    if (host === "youtube.com" || host === "m.youtube.com") {
-      const id = u.searchParams.get("v");
-      if (id) return { kind: "iframe", src: `https://www.youtube.com/embed/${id}` };
-    }
-    if (host === "youtu.be") {
-      const id = u.pathname.slice(1);
-      if (id) return { kind: "iframe", src: `https://www.youtube.com/embed/${id}` };
-    }
-    if (host === "vimeo.com") {
-      const id = u.pathname.split("/").filter(Boolean).pop();
-      if (id) return { kind: "iframe", src: `https://player.vimeo.com/video/${id}` };
-    }
-    if (/\.(mp4|webm|ogg|mov)$/i.test(u.pathname)) {
-      return { kind: "video", src: url };
-    }
-    return { kind: "iframe", src: url };
-  } catch {
-    return { kind: "iframe", src: url };
-  }
-}
-
-export default async function PublicPage({
+// Optionale Gesamt-Uebersicht aller Medien mit Links zu den Einzelseiten.
+export default async function OverviewPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -48,48 +25,33 @@ export default async function PublicPage({
   const tracks = (tracksData ?? []) as Track[];
   const cfgMap = new Map((configRows ?? []).map((r: any) => [r.key, r.value]));
   const config: SiteConfig = {
-    heading: cfgMap.get("heading") || "Meine Audios",
+    heading: cfgMap.get("heading") || "Meine Medien",
     intro: cfgMap.get("intro") || null,
-    video_url: cfgMap.get("video_url") || null,
   };
-
-  const video = config.video_url ? toEmbed(config.video_url) : null;
 
   return (
     <main className="wrap">
       <div className="brand">
-        <span className="dot" /> Audio Collection
+        <span className="dot" /> Übersicht
       </div>
       <h1 className="title">{config.heading}</h1>
       {config.intro ? <p className="intro">{config.intro}</p> : null}
 
-      {video ? (
-        <div className="video-frame">
-          {video.kind === "iframe" ? (
-            <iframe
-              src={video.src}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              title="Video"
-            />
-          ) : (
-            <video src={video.src} controls playsInline />
-          )}
-        </div>
-      ) : null}
-
-      <div className="section-label">Tracks</div>
+      <div className="section-label">
+        {tracks.length} {tracks.length === 1 ? "Eintrag" : "Einträge"}
+      </div>
 
       {tracks.length === 0 ? (
-        <div className="empty">Noch keine Audios vorhanden.</div>
+        <div className="empty">Noch keine Medien vorhanden.</div>
       ) : (
         tracks.map((t) => (
-          <article className="track" key={t.id}>
-            <h2>{t.title}</h2>
-            <audio controls preload="none" src={publicAudioUrl(t.storage_path)}>
-              Dein Browser unterstützt kein Audio.
-            </audio>
-          </article>
+          <Link className="track track-link" key={t.id} href={`/m/${t.slug}`}>
+            <span className={`kind kind-${t.kind}`}>
+              {t.kind === "video" ? "▶ Video" : "♪ Audio"}
+            </span>
+            <span className="track-title">{t.title}</span>
+            <span className="track-go">Öffnen →</span>
+          </Link>
         ))
       )}
 
