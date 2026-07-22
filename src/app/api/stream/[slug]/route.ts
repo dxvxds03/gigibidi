@@ -34,6 +34,16 @@ export async function GET(
   });
 
   if (!upstream.ok && upstream.status !== 206) {
+    const bodyText = await upstream.text().catch(() => "");
+    console.error(
+      "[stream] blob fetch failed",
+      JSON.stringify({
+        status: upstream.status,
+        url: data.url,
+        tokenLen: token.length,
+        body: bodyText.slice(0, 300),
+      })
+    );
     return new Response(`Blob-Fehler ${upstream.status}`, { status: 502 });
   }
 
