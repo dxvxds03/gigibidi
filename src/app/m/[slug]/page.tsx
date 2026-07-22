@@ -26,11 +26,13 @@ export default async function MediaPage({
 
   const isVideo = item.kind === "video";
 
-  // Private Blob-Videos ueber die eigene Stream-Route; Audios direkt aus Supabase.
+  // Oeffentlicher Blob -> direkte URL; privater Blob -> Stream-Route; Audio -> Supabase.
   const src =
-    item.storage === "blob"
-      ? `/api/stream/${item.slug}`
-      : item.url ?? publicMediaUrl(item.storage_path);
+    item.storage === "blob-public" && item.url
+      ? item.url
+      : item.storage === "blob"
+        ? `/api/stream/${item.slug}`
+        : item.url ?? publicMediaUrl(item.storage_path);
 
   return (
     <>
