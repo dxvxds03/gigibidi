@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { del } from "@vercel/blob";
 import { isAuthenticated } from "@/lib/auth";
 import { MEDIA_BUCKET, getServiceClient } from "@/lib/supabase";
 
@@ -34,15 +35,22 @@ export async function DELETE(
 
   const { data: row } = await supabase
     .from("tracks")
-    .select("storage_path")
+    .select("storage_path, storage, url")
     .eq("id", id)
     .maybeSingle();
 
   const { error } = await supabase.from("tracks").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  if (row?.storage_path) {
-    await supabase.storage.from(MEDIA_BUCKET).remove([row.storage_path]);
+  // Datei aus dem jeweiligen Speicher entfernen (Fehler nicht blockierend).
+  try {
+    if (row?.storage === "blob" && row?.url) {
+      await del(row.url);
+    } else if (row?.storage_path) {
+      await supabase.storage.from(MEDIA_BUCKET).remove([row.storage_path]);
+    }
+  } catch {
+    // ignore
   }
   return NextResponse.json({ ok: true });
 }

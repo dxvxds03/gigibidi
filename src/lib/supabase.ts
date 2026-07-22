@@ -34,11 +34,15 @@ export function publicMediaUrl(storagePath: string): string {
 
 export type MediaKind = "audio" | "video";
 
+export type MediaStorage = "supabase" | "blob";
+
 export type Track = {
   id: string;
   title: string;
   slug: string;
   kind: MediaKind;
+  storage: MediaStorage;
+  url: string | null;
   storage_path: string;
   mime: string | null;
   sort_order: number;

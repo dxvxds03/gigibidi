@@ -101,7 +101,7 @@ function Dashboard({
     setTimeout(() => setMsg(null), 5000);
   }
 
-  // Direkter Upload zu Supabase (umgeht Vercel-Limit) + Anlegen des Eintrags.
+  // Upload: Videos gehen zu Vercel Blob (grosse Dateien), Audios zu Supabase.
   async function upload(e: React.FormEvent) {
     e.preventDefault();
     if (!file || !newTitle.trim()) return;
@@ -109,42 +109,65 @@ function Dashboard({
 
     try {
       setUploadPct(0);
+      let commitBody: Record<string, unknown>;
 
-      // 1) Signierte Upload-URL holen
-      const signRes = await fetch("/api/uploads/sign", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ filename: file.name }),
-      });
-      if (!signRes.ok) throw new Error((await signRes.json()).error || "Signieren fehlgeschlagen.");
-      const { signedUrl, path } = await signRes.json();
-
-      // 2) Datei direkt zu Supabase Storage (mit Fortschritt)
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", signedUrl);
-        xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
-        xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) setUploadPct(Math.round((ev.loaded / ev.total) * 100));
+      if (kind === "video") {
+        // Vercel Blob – Direkt-Upload (Multipart, sehr grosse Dateien moeglich)
+        const { upload: blobUpload } = await import("@vercel/blob/client");
+        const blob = await blobUpload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/uploads/blob",
+          multipart: true,
+          contentType: file.type || undefined,
+          onUploadProgress: (p) => setUploadPct(Math.round(p.percentage)),
+        });
+        commitBody = {
+          title: newTitle.trim(),
+          kind,
+          storage: "blob",
+          url: blob.url,
+          storage_path: blob.pathname,
+          mime: file.type || null,
         };
-        xhr.onload = () =>
-          xhr.status >= 200 && xhr.status < 300
-            ? resolve()
-            : reject(new Error(`Upload fehlgeschlagen (HTTP ${xhr.status}).`));
-        xhr.onerror = () => reject(new Error("Netzwerkfehler beim Upload."));
-        xhr.send(file);
-      });
+      } else {
+        // Supabase – signierte Upload-URL, direkter PUT mit Fortschritt
+        const signRes = await fetch("/api/uploads/sign", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ filename: file.name }),
+        });
+        if (!signRes.ok) throw new Error((await signRes.json()).error || "Signieren fehlgeschlagen.");
+        const { signedUrl, path } = await signRes.json();
 
-      // 3) Eintrag anlegen (erzeugt den Permalink-Slug)
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("PUT", signedUrl);
+          xhr.setRequestHeader("content-type", file.type || "application/octet-stream");
+          xhr.upload.onprogress = (ev) => {
+            if (ev.lengthComputable) setUploadPct(Math.round((ev.loaded / ev.total) * 100));
+          };
+          xhr.onload = () =>
+            xhr.status >= 200 && xhr.status < 300
+              ? resolve()
+              : reject(new Error(`Upload fehlgeschlagen (HTTP ${xhr.status}).`));
+          xhr.onerror = () => reject(new Error("Netzwerkfehler beim Upload."));
+          xhr.send(file);
+        });
+
+        commitBody = {
+          title: newTitle.trim(),
+          kind,
+          storage: "supabase",
+          storage_path: path,
+          mime: file.type || null,
+        };
+      }
+
+      // Eintrag anlegen (erzeugt den Permalink-Slug)
       const commitRes = await fetch("/api/tracks", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          kind,
-          storage_path: path,
-          mime: file.type || null,
-        }),
+        body: JSON.stringify(commitBody),
       });
       if (!commitRes.ok) throw new Error((await commitRes.json()).error || "Anlegen fehlgeschlagen.");
       const created: Track = await commitRes.json();

@@ -10,7 +10,7 @@ const mono = Roboto_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Déjà Vu",
+  title: "GIANS B-DAY",
   description: "Private media collection",
   robots: { index: false, follow: false },
 };

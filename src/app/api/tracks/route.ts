@@ -29,11 +29,15 @@ export async function POST(req: Request) {
   const title = String(body?.title ?? "").trim();
   const storage_path = String(body?.storage_path ?? "").trim();
   const kind = body?.kind === "video" ? "video" : "audio";
+  const storage = body?.storage === "blob" ? "blob" : "supabase";
+  const url = body?.url ? String(body.url) : null;
   const mime = body?.mime ? String(body.mime) : null;
 
   if (!title) return NextResponse.json({ error: "Titel fehlt." }, { status: 400 });
   if (!storage_path)
     return NextResponse.json({ error: "Datei-Pfad fehlt." }, { status: 400 });
+  if (storage === "blob" && !url)
+    return NextResponse.json({ error: "Blob-URL fehlt." }, { status: 400 });
 
   const supabase = getServiceClient();
 
@@ -49,7 +53,7 @@ export async function POST(req: Request) {
 
   const { data, error } = await supabase
     .from("tracks")
-    .insert({ title, slug, kind, storage_path, mime, sort_order: nextOrder })
+    .insert({ title, slug, kind, storage, url, storage_path, mime, sort_order: nextOrder })
     .select("*")
     .single();
 

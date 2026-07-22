@@ -24,7 +24,7 @@ export default async function MediaPage({
   const item = data as Track | null;
   if (!item) notFound();
 
-  const src = publicMediaUrl(item.storage_path);
+  const src = item.url ?? publicMediaUrl(item.storage_path);
 
   const isVideo = item.kind === "video";
 

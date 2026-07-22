@@ -9,6 +9,8 @@ create table if not exists public.tracks (
   title        text not null,
   slug         text,                              -- eigener Permalink /m/<slug>
   kind         text not null default 'audio',     -- 'audio' | 'video'
+  storage      text not null default 'supabase',  -- 'supabase' (Audio) | 'blob' (Video)
+  url          text,                              -- volle URL bei Vercel-Blob-Dateien
   storage_path text not null,
   mime         text,
   sort_order   integer not null default 0,
