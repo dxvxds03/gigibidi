@@ -115,7 +115,7 @@ function Dashboard({
         // Vercel Blob – Direkt-Upload (Multipart, sehr grosse Dateien moeglich)
         const { upload: blobUpload } = await import("@vercel/blob/client");
         const blob = await blobUpload(file.name, file, {
-          access: "public",
+          access: "private",
           handleUploadUrl: "/api/uploads/blob",
           multipart: true,
           contentType: file.type || undefined,
